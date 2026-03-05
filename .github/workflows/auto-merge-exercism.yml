@@ -1,12 +1,11 @@
-name: Auto-merge Exercism Solutions
+name: Auto-rebase Exercism Solutions
 on:
   pull_request:
     types: [opened, synchronize]
 
 jobs:
-  auto-merge:
+  auto-rebase:
     runs-on: ubuntu-latest
-    # Only run for pull requests created by the Exercism syncer bot
     if: github.event.pull_request.user.login == 'exercism-solutions-syncer[bot]'
     
     permissions:
@@ -14,11 +13,13 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Merge the PR
+      - name: Add Label and Rebase
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
-          # --merge: Uses a standard merge commit
-          # --delete-branch: Cleans up the temporary branch after merging
-          gh pr merge "$PR_URL" --merge --delete-branch
+          # 1. Add the label
+          gh pr edit "$PR_URL" --add-label "exercism"
+          
+          # 2. Rebase and Merge the PR
+          gh pr merge "$PR_URL" --rebase --delete-branch
