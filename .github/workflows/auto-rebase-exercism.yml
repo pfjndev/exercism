@@ -1,33 +1,29 @@
 name: Auto-rebase Exercism Solutions
 on:
   pull_request:
-    types: [opened, synchronize, reopened] # Added reopened just in case
+    types: [opened, synchronize, reopened]
 
 jobs:
   auto-rebase:
     runs-on: ubuntu-latest
-    # We remove the IF condition temporarily to force it to run once
+    # Only run for the Exercism bot
+    if: github.event.pull_request.user.login == 'exercism-solutions-syncer[bot]'
     
     permissions:
       contents: write
       pull-requests: write
 
     steps:
-      - name: Show PR Creator Login
-        run: |
-          echo "The user attempting this PR is: ${{ github.event.pull_request.user.login }}"
-          echo "The user type is: ${{ github.event.pull_request.user.type }}"
-
       - name: Add Label and Rebase
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
-          # We only run the merge if it's NOT you (pfjndev) 
-          # This is a safer "if" while debugging
-          if [ "${{ github.event.pull_request.user.login }}" != "pfjndev" ]; then
-            gh pr edit "$PR_URL" --add-label "exercism"
-            gh pr merge "$PR_URL" --rebase --delete-branch
-          else
-            echo "Skipping merge because this is a manual PR from the owner."
-          fi
+          # 1. Ensure the label exists (no-op if it already does)
+          gh label create "exercism" --color "19DD95" --confirm || true
+          
+          # 2. Tag the PR for better organization
+          gh pr edit "$PR_URL" --add-label "exercism"
+          
+          # 3. Rebase onto master and delete the sync branch
+          gh pr merge "$PR_URL" --rebase --delete-branch
