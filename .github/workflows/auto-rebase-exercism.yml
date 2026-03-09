@@ -20,7 +20,7 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
           # 1. Ensure the label exists (no-op if it already does)
-          gh label create "exercism" --color "19DD95" --confirm || true
+          gh label create "exercism" --color "19DD95" || true
           
           # 2. Tag the PR for better organization
           gh pr edit "$PR_URL" --add-label "exercism"
