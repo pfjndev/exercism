@@ -6,7 +6,6 @@ on:
 jobs:
   auto-rebase:
     runs-on: ubuntu-latest
-    # Only run for the Exercism bot
     if: github.event.pull_request.user.login == 'exercism-solutions-syncer[bot]'
     
     permissions:
@@ -14,16 +13,29 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Add Label and Rebase
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cleanup & Rebase
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
+          CURRENT_PR: ${{ github.event.pull_request.number }}
         run: |
-          # 1. Ensure the label exists (no-op if it already does)
-          gh label create "exercism" --color "19DD95" || true
+          # 1. CLEANUP: Close other open PRs from the same bot
+          # This finds all open PR numbers from the bot, excludes the current one, and closes them.
+          echo "Checking for old stuck PRs..."
+          OLD_PRS=$(gh pr list --author "exercism-solutions-syncer[bot]" --json number --jq ".[].number | select(. != $CURRENT_PR)")
           
-          # 2. Tag the PR for better organization
-          gh pr edit "$PR_URL" --add-label "exercism"
-          
-          # 3. Rebase onto master and delete the sync branch
-          gh pr merge "$PR_URL" --rebase --delete-branch
+          for pr in $OLD_PRS; do
+            echo "Closing abandoned PR #$pr"
+            gh pr close "$pr" --comment "Closing in favor of the latest solution (#$CURRENT_PR)." --delete-branch
+          done
+
+          # 2. LABEL: Ensure 'exercism' label exists and add it
+          # Using --force acts like an "upsert" (creates if new, updates if exists)
+          gh label create "exercism" --color "19DD95" --force
+          gh pr edit "$CURRENT_PR" --add-label "exercism"
+
+          # 3. MERGE: Rebase and delete the branch
+          echo "Rebasing and merging PR #$CURRENT_PR"
+          gh pr merge "$CURRENT_PR" --rebase --delete-branch
