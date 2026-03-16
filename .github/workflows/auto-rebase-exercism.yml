@@ -7,7 +7,7 @@ jobs:
   auto-rebase:
     runs-on: ubuntu-latest
     if: github.event.pull_request.user.login == 'exercism-solutions-syncer[bot]'
-    
+
     permissions:
       contents: write
       pull-requests: write
@@ -17,25 +17,36 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Cleanup & Rebase
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CURRENT_PR: ${{ github.event.pull_request.number }}
         run: |
-          # 1. CLEANUP: Close other open PRs from the same bot
-          # This finds all open PR numbers from the bot, excludes the current one, and closes them.
+          set -Eeuo pipefail
+
+          echo "Running auto-rebase for PR #${CURRENT_PR}"
+
+          # Confirm GH CLI auth (GH_TOKEN provided via env).
+          gh auth status
+
+          # 1. CLEANUP: Close other open PRs from the same bot (ignore errors so we still merge current PR).
           echo "Checking for old stuck PRs..."
-          OLD_PRS=$(gh pr list --author "exercism-solutions-syncer[bot]" --json number --jq ".[].number | select(. != $CURRENT_PR)")
-          
-          for pr in $OLD_PRS; do
-            echo "Closing abandoned PR #$pr"
-            gh pr close "$pr" --comment "Closing in favor of the latest solution (#$CURRENT_PR)." --delete-branch
-          done
+          OLD_PRS=$(gh pr list --author "exercism-solutions-syncer[bot]" --state open --json number --jq ".[].number | select(. != ${CURRENT_PR})" || true)
+
+          if [[ -n "${OLD_PRS}" ]]; then
+            for pr in ${OLD_PRS}; do
+              echo "Closing abandoned PR #${pr}"
+              gh pr close "${pr}" --comment "Closing in favor of the latest solution (#${CURRENT_PR})." --delete-branch || true
+            done
+          else
+            echo "No other open bot PRs found."
+          fi
 
           # 2. LABEL: Ensure 'exercism' label exists and add it
           # Using --force acts like an "upsert" (creates if new, updates if exists)
           gh label create "exercism" --color "19DD95" --force
-          gh pr edit "$CURRENT_PR" --add-label "exercism"
+          gh pr edit "${CURRENT_PR}" --add-label "exercism"
 
           # 3. MERGE: Rebase and delete the branch
-          echo "Rebasing and merging PR #$CURRENT_PR"
-          gh pr merge "$CURRENT_PR" --rebase --delete-branch
+          echo "Rebasing and merging PR #${CURRENT_PR}"
+          gh pr merge "${CURRENT_PR}" --rebase --delete-branch
