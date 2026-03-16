@@ -1,6 +1,18 @@
 # If you prefer the allow list template instead of the deny list, see community template:
 # https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
 #
+# Folder view configuration files
+**/.DS_Store
+**/Desktop.ini
+
+# Thumbnail cache files
+**/._*
+**/Thumbs.db
+
+# Files that might appear on external disks
+**/.Spotlight-V100
+**/.Trashes
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
