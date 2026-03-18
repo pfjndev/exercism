@@ -25,9 +25,7 @@ jobs:
 
           # 2. ENSURE LABEL & EDIT & MERGE
           # We 'upsert' the label and then pipe the edit/merge commands.
-          gh label create "exercism" --color "19DD95" --force 2>/dev/null || true
+          gh label create "exercism" --color "19DD95" 2>/dev/null || true
           
           # We perform the edit and merge. 
-          # Note: gh pr merge --rebase --delete-branch is the fastest way to conclude.
-          gh pr edit "$CURRENT_PR" --add-label "exercism"
-          gh pr merge "$CURRENT_PR" --rebase --delete-branch
+          gh pr edit "$CURRENT_PR" --add-label "exercism" && gh pr merge "$CURRENT_PR" --rebase --delete-branch
