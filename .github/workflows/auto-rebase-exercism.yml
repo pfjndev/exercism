@@ -6,47 +6,28 @@ on:
 jobs:
   auto-rebase:
     runs-on: ubuntu-latest
-    if: github.event.pull_request.user.login == 'exercism-solutions-syncer[bot]'
-
-    permissions:
-      contents: write
-      pull-requests: write
-
+    env:
+      # This replaces the need for actions/checkout
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CURRENT_PR: ${{ github.event.pull_request.number }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Cleanup & Rebase
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CURRENT_PR: ${{ github.event.pull_request.number }}
+      - name: Fast Merge & Cleanup
         run: |
-          set -Eeuo pipefail
+          set -e
 
-          echo "Running auto-rebase for PR #${CURRENT_PR}"
+          # 1. CLEANUP & LABEL (Combined logic)
+          # We fetch old PRs and create the label in the background or sequence
+          echo "Syncing PR #$CURRENT_PR..."
+          
+          # Close old PRs from the bot (if any)
+          gh pr list --author "exercism-solutions-syncer[bot]" --state open --json number --jq ".[].number | select(. != $CURRENT_PR)" | xargs -I {} gh pr close {} --comment "Superseded by #$CURRENT_PR" --delete-branch || true
 
-          # Confirm GH CLI auth (GH_TOKEN provided via env).
-          gh auth status
-
-          # 1. CLEANUP: Close other open PRs from the same bot (ignore errors so we still merge current PR).
-          echo "Checking for old stuck PRs..."
-          OLD_PRS=$(gh pr list --author "exercism-solutions-syncer[bot]" --state open --json number --jq ".[].number | select(. != ${CURRENT_PR})" || true)
-
-          if [[ -n "${OLD_PRS}" ]]; then
-            for pr in ${OLD_PRS}; do
-              echo "Closing abandoned PR #${pr}"
-              gh pr close "${pr}" --comment "Closing in favor of the latest solution (#${CURRENT_PR})." --delete-branch || true
-            done
-          else
-            echo "No other open bot PRs found."
-          fi
-
-          # 2. LABEL: Ensure 'exercism' label exists and add it
-          # Using --force acts like an "upsert" (creates if new, updates if exists)
-          gh label create "exercism" --color "19DD95" --force
-          gh pr edit "${CURRENT_PR}" --add-label "exercism"
-
-          # 3. MERGE: Rebase and delete the branch
-          echo "Rebasing and merging PR #${CURRENT_PR}"
-          gh pr merge "${CURRENT_PR}" --rebase --delete-branch
+          # 2. ENSURE LABEL & EDIT & MERGE
+          # We 'upsert' the label and then pipe the edit/merge commands.
+          gh label create "exercism" --color "19DD95" --force 2>/dev/null || true
+          
+          # We perform the edit and merge. 
+          # Note: gh pr merge --rebase --delete-branch is the fastest way to conclude.
+          gh pr edit "$CURRENT_PR" --add-label "exercism"
+          gh pr merge "$CURRENT_PR" --rebase --delete-branch
